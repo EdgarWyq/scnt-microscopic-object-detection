@@ -34,6 +34,19 @@
 | YOLO11s + source augmentation | 0.6938 | 0.6574 | 0.9608 | 0.7707 | 0.4842 |
 | Manual-50 YOLO11s retrain | 0.9943 | 0.9774 | 0.9914 | 0.9877 | 0.7183 |
 
+## 有价值的探索结果
+
+项目还保留了“YOLO11s + 源域增强 + 应用层形态后处理”的实验。该方法不重新训练模型，而是在推理阶段根据针体形态把部分疑似 holding needle 的 injection 预测重标为 holding，并过滤异常大的 oocyte 框。
+
+在 full SCNT-Target 自定义评估中：
+
+| Mode | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| raw | 0.3904 | 0.0784 | 0.9145 | 0.4611 | 0.3119 |
+| postprocess | 0.4592 | 0.4987 | 0.9122 | 0.6234 | 0.4351 |
+
+完整说明见 `docs/EXPERIMENT_RESULTS.md`。
+
 ## 工程产出
 
 - `scripts/check_dataset.py`：YOLO 数据集合法性检查。

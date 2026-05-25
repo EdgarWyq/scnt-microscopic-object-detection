@@ -185,6 +185,8 @@ python scripts/train_baseline.py --data configs/scnt_manual_mix.yaml --model yol
 | YOLO11s raw reference | full SCNT-Target | 0.6616 | 0.6448 | 0.9499 | 0.7521 | 0.4864 |
 | Manual-50 YOLO11s retrain | final_eval 479 | 0.9943 | 0.9774 | 0.9914 | 0.9877 | 0.7183 |
 
+补充探索实验见 `docs/EXPERIMENT_RESULTS.md`。其中“YOLO11s + 源域增强 + 应用层形态后处理”在 full SCNT-Target 自定义评估中将 holding needle AP50 从 `0.0784` 提升到 `0.4987`，mAP50 从 `0.4611` 提升到 `0.6234`。该结果说明形态规则可以缓解 holding/injection 混淆，但它属于应用层后处理，不是端到端模型能力，因此没有作为最终主结果。
+
 最终模型路径：
 
 ```text
