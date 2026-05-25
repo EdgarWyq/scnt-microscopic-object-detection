@@ -1,0 +1,10 @@
+# Auto-generated SCNT dataset config for Ultralytics YOLO.
+path: D:/python_code/PythonProject3
+train: dataset/SCNT-Adapted/images
+val: dataset/SCNT/target_split/target_eval/images
+test:
+nc: 3
+names:
+  0: injection_needle
+  1: holding_needle
+  2: oocyte

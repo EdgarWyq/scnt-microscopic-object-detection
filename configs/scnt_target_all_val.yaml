@@ -1,0 +1,12 @@
+# Evaluation config for the complete SCNT target domain.
+# Use this only for all-target/transductive reference evaluation.
+path: D:/python_code/PythonProject3
+train: dataset/SCNT/SCNT-Source/images
+val: dataset/SCNT/SCNT-Target/images
+test:
+nc: 3
+names:
+  0: injection_needle
+  1: holding_needle
+  2: oocyte
+
