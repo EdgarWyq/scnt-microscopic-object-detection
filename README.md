@@ -1,287 +1,244 @@
-# Domain-Adaptive Microscopic Object Detection for SCNT
+# SCNT Microscopic Object Detection
 
-本项目面向显微操作场景中的目标检测任务，检测对象包括注射针、吸持针和卵细胞。项目从源域监督训练开始，逐步尝试域泛化增强、伪标签自训练、误差驱动人工精标和小样本目标域再训练，最终形成一套比较完整的显微目标检测实验流程。
+YOLO-based object detection for microscopic SCNT manipulation images, with source-domain training, domain generalization, pseudo-label experiments, and a few-shot target-domain annotation loop.
 
-## 项目亮点
+This repository is prepared as a portfolio project: it focuses on the engineering workflow, experiment design, error analysis, and reproducible scripts. The dataset, trained weights, and full prediction outputs are intentionally not committed because they may be large or restricted.
 
-- 使用 Ultralytics YOLO 完成 SCNT 显微图像三类目标检测。
-- 严格区分源域标签、目标域无标签图像、目标域最终验证标签。
-- 实现数据检查、目标域划分、训练、验证、伪标签生成、可视化、人工筛图和人工标注辅助脚本。
-- 针对 holding needle 与 injection needle 混淆、小目标漏检、暖色背景迁移等问题做了系统误差分析。
-- 引入 50 张目标域人工精标样本，构建小样本目标域监督微调实验，并在 479 张独立 final_eval 上验证。
+## Task
 
-## 类别定义
+Detect three object categories in microscopic manipulation images:
 
-| ID | 类别 | 中文说明 |
+| ID | Class | Description |
 | --- | --- | --- |
-| 0 | `injection_needle` | 注射针 |
-| 1 | `holding_needle` | 吸持针 |
-| 2 | `oocyte` | 卵细胞 |
+| 0 | `injection_needle` | injection needle |
+| 1 | `holding_needle` | holding needle |
+| 2 | `oocyte` | oocyte |
 
-## 数据集结构
-
-原始数据集目录如下：
+Original data layout:
 
 ```text
 dataset/
-└── SCNT/
-    ├── SCNT-Source/
-    │   ├── images/
-    │   └── labels/
-    └── SCNT-Target/
-        ├── images/
-        └── labels/
++-- SCNT/
+    +-- SCNT-Source/
+    |   +-- images/
+    |   +-- labels/
+    +-- SCNT-Target/
+        +-- images/
+        +-- labels/
 ```
 
-实验中使用的数据规模：
+Experimental data usage:
 
-| 数据部分 | 数量 | 用途 |
+| Split | Images | Usage |
 | --- | ---: | --- |
-| SCNT-Source | 2785 | 源域监督训练 |
-| SCNT-Target | 529 | 目标域图像 |
-| Manual target train | 50 | 人工精标目标域训练样本 |
-| Final eval | 479 | 最终验证集 |
-| ManualMix train | 1871 | 源域采样 + 增强 + 50 张目标域精标重复采样 |
+| SCNT-Source | 2785 | labeled source-domain training data |
+| SCNT-Target | 529 | target-domain images |
+| Manual target train | 50 | manually refined target-domain samples |
+| Final eval | 479 | held-out target-domain evaluation set |
+| ManualMix train | 1871 | sampled source + source augmentations + weighted manual target samples |
 
-注意：`SCNT-Target/labels` 只用于最终验证和误差分析，不能直接混入伪标签训练或无监督自训练。
+Important: target-domain labels are only used for final evaluation and error analysis. The final few-shot experiment uses 50 manually refined target-domain samples and evaluates on the remaining 479 images.
 
-## 环境安装
+## Why This Project Is Interesting
 
-```powershell
-pip install -r requirements.txt
-```
+The task is harder than a standard YOLO demo:
 
-推荐使用 GPU 版 PyTorch。当前主要实验环境：
+- Domain gap between source and target microscopic images.
+- Small and elongated objects, especially needles.
+- Similar visual patterns between `holding_needle` and `injection_needle`.
+- Color and illumination shift, including warm/orange backgrounds.
+- Oocyte false positives caused by bubbles, debris, or dark particles.
+- Need for a practical data loop rather than blindly increasing the training set.
 
-```text
-Python 3.12
-Ultralytics 8.4.51
-torch 2.10.0+cu126
-GPU: NVIDIA GeForce RTX 4060 Laptop GPU
-```
+The final solution was not just "train YOLO once". It became a complete detection workflow:
 
-## 数据检查
+1. Dataset validation.
+2. Source-only baseline.
+3. Microscopic image augmentation.
+4. Pseudo-label self-training and confirmation-bias analysis.
+5. Manual error-driven image selection.
+6. Lightweight YOLO annotation tooling.
+7. Few-shot target-domain retraining.
+8. Held-out final evaluation and visualization.
 
-```powershell
-python scripts/check_dataset.py
-```
+## Representative Results
 
-输出：
+### Final Manual-50 Model
 
-```text
-outputs/dataset_check.txt
-```
+| Example 1 | Example 2 | Example 3 |
+| --- | --- | --- |
+| ![](docs/assets/representative_results/manual50_final/1293.jpg) | ![](docs/assets/representative_results/manual50_final/1470.jpg) | ![](docs/assets/representative_results/manual50_final/1501.jpg) |
 
-检查内容包括：
+### Source Augmentation Raw vs Post-Processing
 
-- 图像和标签是否一一对应。
-- 标签是否为 YOLO 格式：`class x_center y_center width height`。
-- 类别是否只包含 `0, 1, 2`。
-- 归一化 bbox 坐标是否在 `[0, 1]`。
-- 是否存在缺失标签、空标签、非法类别或非法坐标。
+| Raw prediction | Application-layer post-processing |
+| --- | --- |
+| ![](docs/assets/representative_results/source_aug_raw/1293.jpg) | ![](docs/assets/representative_results/source_aug_postprocess/1293.jpg) |
+| ![](docs/assets/representative_results/source_aug_raw/1649.jpg) | ![](docs/assets/representative_results/source_aug_postprocess/1649.jpg) |
 
-## 目标域划分
+More examples and ablations are available in [docs/EXPERIMENT_RESULTS.md](docs/EXPERIMENT_RESULTS.md).
 
-严格实验可以先做 7:3 划分：
+## Main Results
 
-```powershell
-python scripts/split_target.py --overwrite
-```
-
-后续为了做小样本人工精标实验，本项目采用了另一套人工筛图划分：
-
-```text
-dataset/SCNT-ManualSelf/manual_train/images  # 50 张人工精标目标域图像
-dataset/SCNT-ManualSelf/manual_train/labels
-dataset/SCNT-ManualSelf/final_eval/images    # 479 张最终验证图像
-dataset/SCNT-ManualSelf/final_eval/labels
-```
-
-## Baseline 训练
-
-源域 baseline：
-
-```powershell
-python scripts/train_baseline.py --data configs/scnt_source.yaml --model yolov8n.pt --epochs 100 --imgsz 640 --batch 16 --project runs/scnt --name baseline
-```
-
-YOLO11s + 增强实验：
-
-```powershell
-python scripts/train_baseline.py --data configs/scnt_source_aug.yaml --model yolo11s.pt --epochs 50 --imgsz 960 --batch 2 --rect --device 0 --workers 2 --project runs/scnt --name source_aug_yolo11s_compact_smallobj_960 --exist-ok --quiet
-```
-
-## 验证模型
-
-```powershell
-python scripts/val_model.py --model runs/scnt/source_aug_yolo11s_compact_smallobj_960/weights/best.pt --data configs/scnt_source.yaml --name source_aug_yolo11s_compact_smallobj_960 --imgsz 960 --batch 2 --rect --device 0 --summary-csv outputs/experiments_summary.csv --exist-ok --quiet
-```
-
-指标会写入：
-
-```text
-outputs/experiments_summary.csv
-```
-
-## 伪标签自训练
-
-生成伪标签：
-
-```powershell
-python scripts/generate_pseudo_labels.py --model runs/scnt/source_aug_yolo11s_compact_smallobj_960/weights/best.pt --overwrite --device 0
-```
-
-默认筛选阈值：
-
-```text
-class 0 injection_needle: conf >= 0.55
-class 1 holding_needle:   conf >= 0.55
-class 2 oocyte:           conf >= 0.75
-```
-
-构建伪标签训练集：
-
-```powershell
-python scripts/build_pseudo_dataset.py --overwrite
-```
-
-训练：
-
-```powershell
-python scripts/train_pseudo_adapt.py --epochs 50 --imgsz 640 --batch 16
-```
-
-实验观察：伪标签自训练容易受到 confirmation bias 影响，尤其在 holding needle 与 injection needle 混淆明显时，错误伪标签会放大模型偏差。因此本项目最终采用人工精标小样本监督适应作为主结果。
-
-## 人工筛图与标注
-
-快速查看模型原始预测并手动选择高价值样本：
-
-```powershell
-python scripts/review_select_images.py --target-count 50 --reset-selection --overwrite-export
-```
-
-按键：
-
-```text
-空格 / y：选中
-n / d：跳过
-p / a：上一张
-u / x / Delete：取消选中
-s：保存当前选择
-q / Esc：保存并退出
-```
-
-对选中的图片生成预标注：
-
-```powershell
-python scripts/prelabel_fewshot.py --model runs/scnt/source_aug_yolo11s_compact_smallobj_960/weights/best.pt --image-dir dataset/SCNT-ManualSelf/manual_train/images --label-dir dataset/SCNT-ManualSelf/manual_train/labels --imgsz 960 --device 0 --predict-conf 0.25 --conf-class-0 0.25 --conf-class-1 0.25 --conf-class-2 0.25 --overwrite-labels
-```
-
-人工精修：
-
-```powershell
-python scripts/annotate_yolo.py --image-dir dataset/SCNT-ManualSelf/manual_train/images --label-dir dataset/SCNT-ManualSelf/manual_train/labels
-```
-
-标注工具按键：
-
-```text
-0：injection_needle
-1：holding_needle
-2：oocyte
-鼠标拖拽：新增框
-单击框：选中框
-Delete / 右键：删除框
-s：保存当前图
-n：保存并下一张
-p：保存并上一张
-q / Esc：保存并退出
-```
-
-## 构建最终小样本训练集
-
-本项目最终使用：
-
-- 源域原图随机 20%：557 张。
-- 每张源域图随机选 2 张离线增强图：1114 张。
-- 人工精标目标域 50 张，重复采样 4 次：200 张。
-
-构建命令：
-
-```powershell
-python scripts/build_manual_finetune_dataset.py --source-frac 0.20 --aug-per-source 2 --manual-repeat 4 --seed 42 --overwrite
-```
-
-输出：
-
-```text
-dataset/SCNT-ManualMix/
-configs/scnt_manual_mix.yaml
-```
-
-## 最终训练命令
-
-从 COCO 预训练的 YOLO11s 重新训练，而不是从旧 SCNT 模型微调：
-
-```powershell
-python scripts/train_baseline.py --data configs/scnt_manual_mix.yaml --model yolo11s.pt --epochs 80 --imgsz 960 --batch 2 --rect --device 0 --workers 2 --project runs/scnt --name manual50_mix_yolo11s_from_pretrain_960 --patience 20 --hsv-h 0.005 --hsv-s 0.2 --hsv-v 0.15 --scale 0.15 --translate 0.05 --mosaic 0.2 --mixup 0.0 --fliplr 0.0 --flipud 0.0 --close-mosaic 15 --exist-ok --quiet
-```
-
-实际训练中第 15 轮达到最佳，后续指标下降，因此提前停止。最终采用：
-
-```text
-runs/scnt/manual50_mix_yolo11s_from_pretrain_960/weights/best.pt
-```
-
-## 测试集可视化
-
-```powershell
-python scripts/predict_visualize.py --model runs/scnt/manual50_mix_yolo11s_from_pretrain_960/weights/best.pt --source dataset/SCNT-ManualSelf/final_eval/images --output outputs/visualizations/manual50_mix_yolo11s_from_pretrain_960_final_eval_raw --max-images 0 --conf 0.25 --imgsz 960 --batch 1 --rect --device 0 --exist-ok --quiet
-```
-
-打开可视化结果：
-
-```powershell
-explorer outputs\visualizations\manual50_mix_yolo11s_from_pretrain_960_final_eval_raw
-```
-
-## 实验结果
-
-| 实验 | 验证集 | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
+| Experiment | Eval split | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Source plain YOLOv8n | target_eval | 0.2474 | 0.2258 | 0.0788 | 0.1840 | 0.0901 |
 | YOLO11s + source augmentation | target_eval | 0.6938 | 0.6574 | 0.9608 | 0.7707 | 0.4842 |
 | YOLO11s raw reference | full SCNT-Target | 0.6616 | 0.6448 | 0.9499 | 0.7521 | 0.4864 |
 | Manual-50 YOLO11s retrain | final_eval 479 | 0.9943 | 0.9774 | 0.9914 | 0.9877 | 0.7183 |
 
-更多探索实验结果见：
+The final row is a few-shot supervised target-domain adaptation experiment, not a strictly unsupervised domain adaptation result.
+
+## Valuable Ablation: Source Augmentation + Post-Processing
+
+Before using manual target-domain labels, I also tested an application-layer morphology post-processing strategy to reduce `holding_needle` / `injection_needle` confusion.
+
+On full SCNT-Target with a custom evaluator at `conf=0.25`:
+
+| Mode | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| raw | 0.3904 | 0.0784 | 0.9145 | 0.4611 | 0.3119 |
+| postprocess | 0.4592 | 0.4987 | 0.9122 | 0.6234 | 0.4351 |
+
+This showed that morphology rules can partially correct systematic needle-class confusion, but they are not a substitute for better target-domain training data. The final model therefore uses 50 high-value manually refined samples.
+
+## Repository Structure
 
 ```text
-docs/EXPERIMENT_RESULTS.md
+configs/
+  scnt_source.yaml
+  scnt_source_aug.yaml
+  scnt_pseudo.yaml
+  scnt_manual_mix.yaml
+scripts/
+  check_dataset.py
+  split_target.py
+  train_baseline.py
+  val_model.py
+  predict_visualize.py
+  generate_pseudo_labels.py
+  build_pseudo_dataset.py
+  train_pseudo_adapt.py
+  build_augmented_source.py
+  review_select_images.py
+  annotate_yolo.py
+  build_manual_finetune_dataset.py
+docs/
+  EXPERIMENT_RESULTS.md
+  assets/representative_results/
+REPORT.md
+PROJECT_SUMMARY.md
+requirements.txt
 ```
 
-其中保留了“YOLO11s + 源域图像增强 + 应用层形态后处理”的结果、CSV 指标和少量代表性可视化图片。该后处理实验在 full SCNT-Target 自定义评估中将 holding needle AP50 从 `0.0784` 提升到 `0.4987`，mAP50 从 `0.4611` 提升到 `0.6234`。这部分不是最终主方法，但能说明 holding/injection 混淆可以通过形态约束被部分纠正。
+## Key Scripts
 
-说明：最后一行使用了 50 张目标域人工精标样本，因此不再属于严格无监督域自适应，而是“小样本目标域监督适应 / few-shot supervised domain adaptation”。
+| Script | Purpose |
+| --- | --- |
+| `scripts/check_dataset.py` | validate image-label matching and YOLO label format |
+| `scripts/train_baseline.py` | unified YOLO training entry point |
+| `scripts/val_model.py` | validation and metric logging |
+| `scripts/build_augmented_source.py` | offline microscopic image augmentation |
+| `scripts/generate_pseudo_labels.py` | high-confidence pseudo-label generation |
+| `scripts/eval_postprocess.py` | raw vs morphology post-processing evaluation |
+| `scripts/review_select_images.py` | fast manual image selection for active learning |
+| `scripts/annotate_yolo.py` | lightweight OpenCV YOLO annotator |
+| `scripts/build_manual_finetune_dataset.py` | build final few-shot target adaptation dataset |
 
-## 主要结论
+## Setup
 
-1. 仅源域训练在目标域上性能较差，说明源域和目标域存在明显 domain gap。
-2. 图像增强和更强的 YOLO11s 模型能显著提升 oocyte 检测，但 holding needle 与 injection needle 仍容易混淆。
-3. 伪标签自训练在目标域误检较多时会受到 confirmation bias 影响，不一定稳定提升。
-4. 通过错误分析筛选少量目标域样本进行人工精标，再与源域采样和增强数据混合训练，是本项目中最有效的改进路线。
-5. 最终模型在 479 张独立 final_eval 上达到 `mAP50=0.9877`、`mAP50-95=0.7183`。
+```powershell
+pip install -r requirements.txt
+```
 
-## GitHub 说明
-
-本仓库默认不上传以下内容：
+Main experiment environment:
 
 ```text
-dataset/
-runs/
-outputs/
-*.pt
+Python 3.12
+Ultralytics 8.4.51
+PyTorch 2.10.0+cu126
+GPU: NVIDIA GeForce RTX 4060 Laptop GPU
 ```
 
-原因是数据集、训练权重和可视化结果通常体积较大，也可能涉及课程或数据授权限制。完整复现实验需要在本地放置数据集，并按 README 中的命令重新生成中间文件。
+## Reproduce the Workflow
+
+### 1. Check dataset
+
+```powershell
+python scripts/check_dataset.py
+```
+
+Output:
+
+```text
+outputs/dataset_check.txt
+```
+
+### 2. Train source baseline
+
+```powershell
+python scripts/train_baseline.py --data configs/scnt_source.yaml --model yolov8n.pt --epochs 100 --imgsz 640 --batch 16 --project runs/scnt --name baseline
+```
+
+### 3. Train YOLO11s source-augmentation model
+
+```powershell
+python scripts/train_baseline.py --data configs/scnt_source_aug.yaml --model yolo11s.pt --epochs 50 --imgsz 960 --batch 2 --rect --device 0 --workers 2 --project runs/scnt --name source_aug_yolo11s_compact_smallobj_960 --exist-ok --quiet
+```
+
+### 4. Select target-domain samples for manual refinement
+
+```powershell
+python scripts/review_select_images.py --target-count 50 --reset-selection --overwrite-export
+```
+
+### 5. Pre-label selected images
+
+```powershell
+python scripts/prelabel_fewshot.py --model runs/scnt/source_aug_yolo11s_compact_smallobj_960/weights/best.pt --image-dir dataset/SCNT-ManualSelf/manual_train/images --label-dir dataset/SCNT-ManualSelf/manual_train/labels --imgsz 960 --device 0 --predict-conf 0.25 --conf-class-0 0.25 --conf-class-1 0.25 --conf-class-2 0.25 --overwrite-labels
+```
+
+### 6. Manually refine labels
+
+```powershell
+python scripts/annotate_yolo.py --image-dir dataset/SCNT-ManualSelf/manual_train/images --label-dir dataset/SCNT-ManualSelf/manual_train/labels
+```
+
+### 7. Build final mixed training dataset
+
+```powershell
+python scripts/build_manual_finetune_dataset.py --source-frac 0.20 --aug-per-source 2 --manual-repeat 4 --seed 42 --overwrite
+```
+
+### 8. Train final model
+
+```powershell
+python scripts/train_baseline.py --data configs/scnt_manual_mix.yaml --model yolo11s.pt --epochs 80 --imgsz 960 --batch 2 --rect --device 0 --workers 2 --project runs/scnt --name manual50_mix_yolo11s_from_pretrain_960 --patience 20 --hsv-h 0.005 --hsv-s 0.2 --hsv-v 0.15 --scale 0.15 --translate 0.05 --mosaic 0.2 --mixup 0.0 --fliplr 0.0 --flipud 0.0 --close-mosaic 15 --exist-ok --quiet
+```
+
+In the recorded run, the best checkpoint appeared around epoch 15 and training was stopped early.
+
+### 9. Evaluate final model
+
+```powershell
+python scripts/val_model.py --model runs/scnt/manual50_mix_yolo11s_from_pretrain_960/weights/best.pt --data configs/scnt_manual_mix.yaml --name manual50_mix_yolo11s_from_pretrain_960_earlystop_best --imgsz 960 --batch 2 --rect --device 0 --summary-csv outputs/experiments_summary.csv --exist-ok --quiet
+```
+
+### 10. Visualize final predictions
+
+```powershell
+python scripts/predict_visualize.py --model runs/scnt/manual50_mix_yolo11s_from_pretrain_960/weights/best.pt --source dataset/SCNT-ManualSelf/final_eval/images --output outputs/visualizations/manual50_mix_yolo11s_from_pretrain_960_final_eval_raw --max-images 0 --conf 0.25 --imgsz 960 --batch 1 --rect --device 0 --exist-ok --quiet
+```
+
+## Notes for Reviewers
+
+- This repository does not include the dataset or trained weights.
+- Representative visualizations are included only for portfolio demonstration.
+- The final result uses 50 manually refined target-domain samples, so it should be described as few-shot supervised target-domain adaptation.
+- The pseudo-label experiments are kept because they show a realistic failure mode: confirmation bias can amplify systematic model errors.
+
+## Documents
+
+- [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md): concise portfolio summary.
+- [REPORT.md](REPORT.md): course-style report in Chinese.
+- [docs/EXPERIMENT_RESULTS.md](docs/EXPERIMENT_RESULTS.md): ablations and representative visualizations.

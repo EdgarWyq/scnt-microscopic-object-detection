@@ -1,0 +1,12 @@
+*.py text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.txt text eol=lf
+*.csv text eol=lf
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.pt binary
+*.onnx binary
+*.engine binary

@@ -1,10 +1,26 @@
-# 项目总结：SCNT 显微目标检测
+# Portfolio Summary
 
-## 一句话介绍
+## Project
 
-基于 Ultralytics YOLO 构建显微操作图像目标检测系统，检测注射针、吸持针和卵细胞；通过域泛化增强、伪标签自训练和少量目标域人工精标，最终在 479 张目标域验证图像上达到 `mAP50=0.9877`、`mAP50-95=0.7183`。
+**SCNT Microscopic Object Detection**  
+YOLO-based detection system for microscopic manipulation images, detecting injection needles, holding needles, and oocytes.
 
-## 技术栈
+## What I Built
+
+I built an end-to-end object detection workflow instead of only training a single model:
+
+- YOLO dataset validation for image-label matching and normalized bbox checking.
+- Source-domain baseline training and target-domain validation.
+- Microscopic image augmentation for domain generalization.
+- Pseudo-label generation and self-training experiments.
+- Analysis of confirmation bias in pseudo labels.
+- Fast manual image review tool for active sample selection.
+- Lightweight OpenCV YOLO annotation tool.
+- Few-shot target-domain retraining with 50 manually refined samples.
+- Final evaluation on 479 held-out target-domain images.
+- Batch prediction visualization for qualitative review.
+
+## Technical Stack
 
 - Python
 - Ultralytics YOLO / YOLO11s
@@ -13,70 +29,57 @@
 - pandas / matplotlib / tqdm
 - Windows + PyCharm + RTX 4060 Laptop GPU
 
-## 我解决的问题
+## Core Challenge
 
-源域和目标域显微图像存在明显差异：目标尺度、颜色背景、针体方向、模糊程度和杂质分布都不同。纯源域训练模型在目标域上容易漏检小目标，也容易把 holding needle 和 injection needle 混淆。
+The source and target microscopic domains differ in scale, color, contrast, background texture, and object morphology. The hardest issue was the confusion between `holding_needle` and `injection_needle`, especially when target-domain needles appeared in shapes or orientations underrepresented in the source domain.
 
-项目最终采用错误驱动的数据闭环：
+## Method Evolution
 
-1. 训练源域 baseline。
-2. 增加显微图像域泛化增强。
-3. 尝试伪标签无监督自训练并分析 confirmation bias。
-4. 人工筛选 50 张高价值目标域图像进行精标。
-5. 使用源域 20% 采样、每张 2 个增强版本和 50 张人工目标域样本混合训练。
-6. 在剩余 479 张目标域图像上做最终验证。
+1. **Source-only YOLOv8n baseline**  
+   Established the lower-bound performance and exposed the domain gap.
 
-## 最终结果
+2. **YOLO11s + source-domain augmentation**  
+   Improved robustness to color, scale, and small-object shifts.
 
-| 方法 | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
+3. **Pseudo-label self-training**  
+   Implemented an unsupervised adaptation pipeline, but found that systematic mistakes could be reinforced by pseudo labels.
+
+4. **Manual high-value sample loop**  
+   Selected and refined 50 target-domain samples based on model errors, then retrained YOLO11s with sampled source data and target-domain annotations.
+
+## Results
+
+| Method | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Source plain YOLOv8n | 0.2474 | 0.2258 | 0.0788 | 0.1840 | 0.0901 |
 | YOLO11s + source augmentation | 0.6938 | 0.6574 | 0.9608 | 0.7707 | 0.4842 |
 | Manual-50 YOLO11s retrain | 0.9943 | 0.9774 | 0.9914 | 0.9877 | 0.7183 |
 
-## 有价值的探索结果
+The final result is a few-shot supervised target-domain adaptation experiment, evaluated on 479 held-out target-domain images.
 
-项目还保留了“YOLO11s + 源域增强 + 应用层形态后处理”的实验。该方法不重新训练模型，而是在推理阶段根据针体形态把部分疑似 holding needle 的 injection 预测重标为 holding，并过滤异常大的 oocyte 框。
+## Useful Ablation
 
-在 full SCNT-Target 自定义评估中：
+I also tested morphology-based post-processing to reduce holding/injection confusion. On full SCNT-Target using a custom evaluator at `conf=0.25`:
 
 | Mode | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | raw | 0.3904 | 0.0784 | 0.9145 | 0.4611 | 0.3119 |
 | postprocess | 0.4592 | 0.4987 | 0.9122 | 0.6234 | 0.4351 |
 
-完整说明见 `docs/EXPERIMENT_RESULTS.md`。
+This showed that application-layer rules can partially fix systematic class confusion, but better annotated target-domain data is more robust.
 
-## 工程产出
+## Representative Visualizations
 
-- `scripts/check_dataset.py`：YOLO 数据集合法性检查。
-- `scripts/train_baseline.py`：统一 YOLO 训练入口。
-- `scripts/val_model.py`：模型验证并写入 CSV。
-- `scripts/generate_pseudo_labels.py`：目标域伪标签生成。
-- `scripts/build_augmented_source.py`：离线显微图像增强。
-- `scripts/review_select_images.py`：人工快速筛图。
-- `scripts/annotate_yolo.py`：轻量 OpenCV YOLO 标注工具。
-- `scripts/build_manual_finetune_dataset.py`：构建最终小样本目标域适应训练集。
-- `scripts/predict_visualize.py`：批量预测可视化。
+See [docs/EXPERIMENT_RESULTS.md](docs/EXPERIMENT_RESULTS.md) for raw predictions, post-processed predictions, and final model examples.
 
-## 项目价值
+## Why This Project Is Relevant for Internships
 
-这个项目不只是跑通 YOLO，而是完整覆盖了真实视觉项目中常见的数据闭环：
+This project demonstrates practical machine learning engineering skills:
 
-- 数据检查。
-- Baseline 建立。
-- 误差分析。
-- 增强实验。
-- 伪标签方案验证。
-- 人工高价值样本筛选。
-- 小样本精标。
-- 重新训练和独立验证。
-- 可视化结果复查。
-
-## 可进一步改进
-
-- 用更标准的 active learning 策略自动推荐待标注样本。
-- 引入更大规模的显微操作数据集，提高泛化能力。
-- 进一步分析 holding/injection 的形态特征，设计更稳定的类别判别策略。
-- 尝试 YOLO11m、RT-DETR、DINO 系列检测器。
-- 增加模型导出与实时推理界面。
+- Building reliable data pipelines.
+- Designing fair train/eval splits.
+- Debugging model failures with visual evidence.
+- Avoiding misleading metrics and clearly separating unsupervised and supervised settings.
+- Turning error analysis into targeted data collection.
+- Writing reusable training, validation, annotation, and visualization scripts.
+- Presenting results honestly with limitations and ablations.
