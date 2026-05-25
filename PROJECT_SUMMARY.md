@@ -1,26 +1,28 @@
-# Portfolio Summary
+# 项目简历版总结
 
-## Project
+## 项目名称
 
-**SCNT Microscopic Object Detection**  
-YOLO-based detection system for microscopic manipulation images, detecting injection needles, holding needles, and oocytes.
+**SCNT 显微目标检测系统**
 
-## What I Built
+基于 Ultralytics YOLO / YOLO11s 的显微操作图像目标检测项目，检测注射针、吸持针和卵细胞。
 
-I built an end-to-end object detection workflow instead of only training a single model:
+## 项目一句话
 
-- YOLO dataset validation for image-label matching and normalized bbox checking.
-- Source-domain baseline training and target-domain validation.
-- Microscopic image augmentation for domain generalization.
-- Pseudo-label generation and self-training experiments.
-- Analysis of confirmation bias in pseudo labels.
-- Fast manual image review tool for active sample selection.
-- Lightweight OpenCV YOLO annotation tool.
-- Few-shot target-domain retraining with 50 manually refined samples.
-- Final evaluation on 479 held-out target-domain images.
-- Batch prediction visualization for qualitative review.
+针对源域和目标域显微图像差异导致的漏检、误检和针类混淆问题，构建了从数据检查、模型训练、伪标签实验、误差分析、人工精标到最终验证的完整目标检测闭环。
 
-## Technical Stack
+## 我做了什么
+
+- 搭建 YOLO 检测训练、验证、预测和可视化流程。
+- 编写数据检查脚本，自动检查图像/标签对应关系、YOLO 标签格式、类别合法性和 bbox 坐标范围。
+- 设计显微图像域泛化增强，处理颜色、尺度、小目标和背景差异。
+- 实现目标域伪标签生成和二阶段自训练流程。
+- 分析伪标签 confirmation bias，发现 holding/injection 系统性错误会被伪标签放大。
+- 实现快速筛图工具，从目标域中挑选高价值人工标注样本。
+- 实现 OpenCV 轻量 YOLO 标注工具，用于快速精修标签。
+- 使用 50 张目标域人工精标样本，构建小样本目标域适应训练集。
+- 在 479 张独立目标域图像上完成最终验证和预测可视化。
+
+## 技术栈
 
 - Python
 - Ultralytics YOLO / YOLO11s
@@ -29,57 +31,75 @@ I built an end-to-end object detection workflow instead of only training a singl
 - pandas / matplotlib / tqdm
 - Windows + PyCharm + RTX 4060 Laptop GPU
 
-## Core Challenge
+## 主要难点
 
-The source and target microscopic domains differ in scale, color, contrast, background texture, and object morphology. The hardest issue was the confusion between `holding_needle` and `injection_needle`, especially when target-domain needles appeared in shapes or orientations underrepresented in the source domain.
+1. **源域和目标域差异明显**
+   目标域存在颜色、亮度、尺度、模糊程度和背景纹理变化。
 
-## Method Evolution
+2. **针类容易混淆**
+   `holding_needle` 和 `injection_needle` 都是细长结构，模型容易根据源域偏置把 holding 识别为 injection。
 
-1. **Source-only YOLOv8n baseline**  
-   Established the lower-bound performance and exposed the domain gap.
+3. **小目标和模糊目标漏检**
+   目标域中存在更小、更远、更模糊的针和卵细胞。
 
-2. **YOLO11s + source-domain augmentation**  
-   Improved robustness to color, scale, and small-object shifts.
+4. **伪标签不稳定**
+   初始模型错误较多时，伪标签会继承甚至放大错误。
 
-3. **Pseudo-label self-training**  
-   Implemented an unsupervised adaptation pipeline, but found that systematic mistakes could be reinforced by pseudo labels.
+## 方法演进
 
-4. **Manual high-value sample loop**  
-   Selected and refined 50 target-domain samples based on model errors, then retrained YOLO11s with sampled source data and target-domain annotations.
+### 1. 源域 YOLOv8n baseline
 
-## Results
+先使用源域有标签数据训练 baseline，验证源域到目标域存在明显 domain gap。
 
-| Method | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
+### 2. YOLO11s + 源域增强
+
+引入更强的 YOLO11s，并加入显微图像相关增强，明显提升目标域检测效果，尤其是卵细胞检测。
+
+### 3. 伪标签自训练
+
+实现目标域无标签图像的伪标签生成和二阶段训练，但发现 holding/injection 混淆会被错误伪标签放大。
+
+### 4. 人工高价值样本闭环
+
+根据模型错误筛选 50 张高价值目标域图像进行人工精修，和源域采样增强数据混合后重新训练。
+
+## 实验结果
+
+| 方法 | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Source plain YOLOv8n | 0.2474 | 0.2258 | 0.0788 | 0.1840 | 0.0901 |
 | YOLO11s + source augmentation | 0.6938 | 0.6574 | 0.9608 | 0.7707 | 0.4842 |
 | Manual-50 YOLO11s retrain | 0.9943 | 0.9774 | 0.9914 | 0.9877 | 0.7183 |
 
-The final result is a few-shot supervised target-domain adaptation experiment, evaluated on 479 held-out target-domain images.
+最终结果使用 50 张人工精标目标域样本，并在 479 张独立目标域验证图像上评估。
 
-## Useful Ablation
+## 有价值的探索实验
 
-I also tested morphology-based post-processing to reduce holding/injection confusion. On full SCNT-Target using a custom evaluator at `conf=0.25`:
+在加入人工目标域标注前，我还测试了“源域增强模型 + 应用层形态后处理”：
 
 | Mode | AP50 injection | AP50 holding | AP50 oocyte | mAP50 | mAP50-95 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | raw | 0.3904 | 0.0784 | 0.9145 | 0.4611 | 0.3119 |
 | postprocess | 0.4592 | 0.4987 | 0.9122 | 0.6234 | 0.4351 |
 
-This showed that application-layer rules can partially fix systematic class confusion, but better annotated target-domain data is more robust.
+这个实验说明，形态规则能部分缓解 holding/injection 混淆，但最终更稳定的方案还是补充少量高质量目标域标注。
 
-## Representative Visualizations
+## 适合在面试中强调的点
 
-See [docs/EXPERIMENT_RESULTS.md](docs/EXPERIMENT_RESULTS.md) for raw predictions, post-processed predictions, and final model examples.
+- 不是只会调用 YOLO，而是做了完整检测项目闭环。
+- 能够发现模型失败原因，并通过数据策略解决问题。
+- 理解伪标签的适用条件和 confirmation bias 风险。
+- 知道如何区分严格无监督域自适应和少样本监督适应。
+- 能写配套工具脚本，提高实验效率。
+- 能用可视化和指标共同解释模型效果。
 
-## Why This Project Is Relevant for Internships
+## 面试介绍话术
 
-This project demonstrates practical machine learning engineering skills:
+> 我做了一个显微操作目标检测项目，检测注射针、吸持针和卵细胞。这个任务的难点是源域和目标域差异明显，holding needle 和 injection needle 容易混淆，小目标和模糊目标也容易漏检。我先做了 YOLO baseline 和显微图像增强，又尝试伪标签自训练，发现伪标签会放大系统性错误。最后我实现了快速筛图和标注工具，只精修 50 张高价值目标域样本，和源域采样增强数据混合训练，在 479 张独立目标域测试图上达到 mAP50 0.9877。
 
-- Building reliable data pipelines.
-- Designing fair train/eval splits.
-- Debugging model failures with visual evidence.
-- Avoiding misleading metrics and clearly separating unsupervised and supervised settings.
-- Turning error analysis into targeted data collection.
-- Writing reusable training, validation, annotation, and visualization scripts.
-- Presenting results honestly with limitations and ablations.
+## 进一步改进方向
+
+- 使用更标准的 active learning 策略推荐标注样本。
+- 尝试 YOLO11m、RT-DETR、DINO 等更强检测器。
+- 增加模型导出和实时推理界面。
+- 收集更多不同显微设备和操作阶段的数据，提高泛化能力。
