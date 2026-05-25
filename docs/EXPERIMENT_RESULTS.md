@@ -70,7 +70,35 @@ docs/results/postprocess_eval_yolo11s_all_target_conf025.csv
 
 因此，后处理适合作为工程应用的辅助策略；最终模型能力提升仍然依赖更好的训练数据。本项目最终采用 50 张目标域人工精标样本重新训练，取得了更稳定的结果。
 
-## 5. Reproduction Commands
+## 5. Representative Visualizations
+
+为避免仓库体积过大，这里只保留少量代表性预测图。完整可视化结果可在本地通过脚本重新生成。
+
+### Source Augmentation Raw vs Post-Processing
+
+| Raw prediction | Post-processed prediction |
+| --- | --- |
+| ![](assets/representative_results/source_aug_raw/1293.jpg) | ![](assets/representative_results/source_aug_postprocess/1293.jpg) |
+| ![](assets/representative_results/source_aug_raw/1470.jpg) | ![](assets/representative_results/source_aug_postprocess/1470.jpg) |
+| ![](assets/representative_results/source_aug_raw/1649.jpg) | ![](assets/representative_results/source_aug_postprocess/1649.jpg) |
+
+### Dense Oocyte / Small Object Cases
+
+| Raw prediction | Post-processed prediction |
+| --- | --- |
+| ![](assets/representative_results/source_aug_raw/1501.jpg) | ![](assets/representative_results/source_aug_postprocess/1501.jpg) |
+| ![](assets/representative_results/source_aug_raw/1524.jpg) | ![](assets/representative_results/source_aug_postprocess/1524.jpg) |
+| ![](assets/representative_results/source_aug_raw/1595.jpg) | ![](assets/representative_results/source_aug_postprocess/1595.jpg) |
+
+### Final Manual-50 Model Examples
+
+| Example | Visualization |
+| --- | --- |
+| Mixed needles and oocytes | ![](assets/representative_results/manual50_final/1293.jpg) |
+| Needle with small noisy objects | ![](assets/representative_results/manual50_final/1470.jpg) |
+| Dense oocyte field | ![](assets/representative_results/manual50_final/1501.jpg) |
+
+## 6. Reproduction Commands
 
 评估 source augmentation + 后处理：
 
@@ -90,6 +118,6 @@ python scripts/eval_postprocess.py --model runs/scnt/source_aug_yolo11s_compact_
 python scripts/predict_visualize.py --model runs/scnt/source_aug_yolo11s_compact_smallobj_960/weights/best.pt --source dataset/SCNT/SCNT-Target/images --output outputs/visualizations/yolo11s_all_target_postprocess_all --max-images 0 --conf 0.25 --imgsz 960 --batch 1 --rect --device 0 --needle-morphology-relabel --filter-oocyte-size --exist-ok --quiet
 ```
 
-## 6. Why This Was Not the Final Main Result
+## 7. Why This Was Not the Final Main Result
 
 后处理能有效缓解 holding/injection 的类别混淆，但它依赖人工规则，泛化性取决于目标场景是否符合这些形态假设。为了得到更稳健的模型，本项目最终选择用少量目标域人工精标数据构建训练闭环，并在 479 张独立 final_eval 上验证。

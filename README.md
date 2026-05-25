@@ -261,7 +261,7 @@ explorer outputs\visualizations\manual50_mix_yolo11s_from_pretrain_960_final_eva
 docs/EXPERIMENT_RESULTS.md
 ```
 
-其中保留了“YOLO11s + 源域图像增强 + 应用层形态后处理”的结果。该后处理实验在 full SCNT-Target 自定义评估中将 holding needle AP50 从 `0.0784` 提升到 `0.4987`，mAP50 从 `0.4611` 提升到 `0.6234`。这部分不是最终主方法，但能说明 holding/injection 混淆可以通过形态约束被部分纠正。
+其中保留了“YOLO11s + 源域图像增强 + 应用层形态后处理”的结果、CSV 指标和少量代表性可视化图片。该后处理实验在 full SCNT-Target 自定义评估中将 holding needle AP50 从 `0.0784` 提升到 `0.4987`，mAP50 从 `0.4611` 提升到 `0.6234`。这部分不是最终主方法，但能说明 holding/injection 混淆可以通过形态约束被部分纠正。
 
 说明：最后一行使用了 50 张目标域人工精标样本，因此不再属于严格无监督域自适应，而是“小样本目标域监督适应 / few-shot supervised domain adaptation”。
 
